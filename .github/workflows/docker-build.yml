@@ -1,4 +1,4 @@
-name: Build and Push Docker Image
+name: Build and Deploy
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Log in to GHCR
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -30,3 +30,20 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/azure-python-app:latest
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to Azure VM
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AZURE_VM_HOST }}
+          username: ${{ secrets.AZURE_VM_USER }}
+          key: ${{ secrets.AZURE_SSH_KEY }}
+          script: |
+            docker pull ghcr.io/${{ github.repository_owner }}/azure-python-app:latest
+            docker stop azure-python-container || true
+            docker rm azure-python-container || true
+            docker run -d -p 8000:8000 --name azure-python-container ghcr.io/${{ github.repository_owner }}/azure-python-app:latest
